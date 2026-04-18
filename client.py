@@ -72,6 +72,9 @@ class MessengerUI:
                 if not user or not password:
                     messagebox.showwarning("Внимание", "Заполните все поля")
                     return
+                if len(password) < 8:
+                    messagebox.showwarning("Внимание", "Пароль должен содержать минимум \n 8 символов")
+                    return
                 
                 # Временно сохраняем введенное имя, чтобы использовать его после успеха
                 self.temp_username = user 
@@ -101,7 +104,6 @@ class MessengerUI:
                 "text": text
             }
         else:
-            print(list(self.private_tabs.keys()))
             username = current_tab
 
             data = {
@@ -147,24 +149,27 @@ class MessengerUI:
 
             self.users_list.insert(tk.END, display)
 
-            # 🎨 цвет
+            #цвет
             if online:
                 self.users_list.itemconfig(i, fg="#00ff41")
             else:
                 self.users_list.itemconfig(i, fg="#555555")
     # ---------- SHOW ----------
     def show(self, msg):
-        print(msg)
         msg_type = msg.get("type")
 
         if msg_type == "image":
-            if msg.get("from") == self.username:
-                chat_user = msg.get("to")
-                text = f"Вы:\n"
+            if msg.get("subtype") == "chat":
+                chat = "global"
+                text = f"{msg.get('user')}:\n"
             else:
-                chat_user = msg.get("from")
-                text = f"{chat_user}:\n"
-                self.notify_user(chat_user)
+                if msg.get("from") == self.username:
+                    chat_user = msg.get("to")
+                    text = f"Вы:\n"
+                else:
+                    chat_user = msg.get("from")
+                    text = f"{chat_user}:\n"
+                    self.notify_user(chat_user)
             img_data = base64.b64decode(msg.get("image"))
             image = Image.open(io.BytesIO(img_data))
 
@@ -172,21 +177,21 @@ class MessengerUI:
 
             photo = ImageTk.PhotoImage(image)
             chat = self.current_chat if self.current_chat != "global" else "global"     
-            if self.current_chat == chat_user:
+
+
+
+
+            if chat not in self.chat_history:
+                self.chat_history[chat] = []
+            self.chat_history[chat].append(("text", text))
+            self.chat_history[chat].append(("image", img_data))
+            if self.current_chat == chat:
                 self.chat_box.config(state="normal")
                 self.chat_box.insert(tk.END, text)
                 self.chat_box.image_create(tk.END, image=photo)
                 self.chat_box.insert(tk.END, "\n")
                 self.chat_box.config(state="disabled")
                 self.chat_box.yview(tk.END)
-
-
-
-            if chat not in self.chat_history:
-                self.chat_history[chat] = []
-
-            self.chat_history[chat].append(("image", img_data))
-            self.chat_box.config(state="normal")
 
 
             # ❗ важно сохранить ссылку
@@ -244,8 +249,9 @@ class MessengerUI:
 
             if "global" not in self.chat_history:
                 self.chat_history["global"] = []
-        
-            self.chat_history["global"].append(text)
+
+            self.chat_history["global"].append(("text", text))
+
             if self.current_chat == "global":
                 self.chat_box.config(state="normal")
                 self.chat_box.insert(tk.END, text)
@@ -308,10 +314,8 @@ class MessengerUI:
         return chat_box
     
     def send_image(self):
-        print("SI")
         path = filedialog.askopenfilename(filetypes=[("Images", "*.png *.jpg *.jpeg")])
         if not path:
-            print("Return")
             return
 
         with open(path, "rb") as f:
@@ -323,7 +327,6 @@ class MessengerUI:
             "subtype": "dm" if self.current_chat != "global" else "chat",
             "image": img_data
         }
-        print(data)
         self.socket.send((json.dumps(data) + "\n").encode("utf-8"))
 
     def open_dm(self, event):
@@ -395,7 +398,7 @@ class MessengerUI:
 
         btn_global = tk.Button(
             self.left_frame,
-            text="Общий канал",
+            text="Общий чат",
             bg="#2e352e",
             fg=TEXT,
             relief=tk.FLAT,
@@ -516,14 +519,14 @@ class MessengerUI:
         self.chat_name.config(text="Общий чат")
         self.chat_box.config(state="normal")
         self.chat_box.delete(1.0, tk.END)
-
+        
         if "global" in self.chat_history:
             for msg in self.chat_history["global"]:
                 if msg[0] == "text":
                     self.chat_box.insert(tk.END, msg[1])
                 elif msg[0] == "image":
-                    img_data = base64.b64decode(msg[1])
-                    image = Image.open(io.BytesIO(img_data))
+                    #img_data = base64.b64decode(msg[1])
+                    image = Image.open(io.BytesIO(msg[1]))
                     image.thumbnail((200, 200))
                     photo = ImageTk.PhotoImage(image)
 
@@ -532,7 +535,7 @@ class MessengerUI:
 
                     self.images.append(photo)
                     
-                    self.chat_box.config(state="disabled")
+        self.chat_box.config(state="disabled")
     # ---------- EXIT ----------
     def exit_app(self):
         try:

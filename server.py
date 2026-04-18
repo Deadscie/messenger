@@ -132,7 +132,7 @@ def handle_client(conn):
                 elif msg_type == "message":
                     print("М ERROR")
                     print(message)
-                    # 💌 DM
+                    #  DM
                     if message.get("subtype") == "dm":
                         to_user = message.get("to")
                         from_user = users.get(conn, "Unknown")
@@ -181,21 +181,28 @@ def handle_client(conn):
                         print(message.get("image"))
                         send_to_user(to_user, {
                             "type": "image",
+                            "subtype": "dm",
                             "from": from_user,
                             "image": message.get("image")
                         })
 
                         conn.send((json.dumps({
                             "type": "image",
+                            "subtype": "dm",
                             "from": from_user,
                             "to": to_user,
                             "image": message.get("image")
                         }) + "\n").encode("utf-8"))
 
                     else:
+                        username = users.get(conn, "Unknown")
+                        cursor.execute(
+        "INSERT INTO messages (type, sender, receiver, image) VALUES (?, ?, ?, ?)",
+        ("chat", username, None, message.get("image")))
                         broadcast({
                             "type": "image",
-                            "from": from_user,
+                            "subtype": "chat",
+                            "user": from_user,
                             "image": message.get("image")
                         })
                 elif msg_type == "get_history":
@@ -234,6 +241,7 @@ def handle_client(conn):
                                 }) + "\n").encode("utf-8"))
 
 
+
                 elif msg_type == "logout":
                     username = users.get(conn, "Unknown")
 
@@ -261,16 +269,25 @@ def handle_client(conn):
 def send_history_after_login(conn):
     """Отправляет последние 50 сообщений общего чата конкретному соединению"""
     cursor.execute(
-        "SELECT sender, text FROM messages WHERE type='chat' ORDER BY id DESC LIMIT 50"
+        "SELECT type, sender, text, image FROM messages WHERE type='chat' ORDER BY id DESC LIMIT 50"
     )
     rows = cursor.fetchall()
-    for sender, text in reversed(rows):
-        conn.send((json.dumps({
-            "type": "message",
-            "subtype": "chat",
-            "user": sender,
-            "text": text
-        }) + "\n").encode("utf-8"))
+    for type, sender, text, image in reversed(rows):
+        if text != None:
+            conn.send((json.dumps({
+                "type": "message",
+                "subtype": "chat",
+                "user": sender,
+                "text": text
+            }) + "\n").encode("utf-8"))
+        else:
+            print(rows)
+            conn.send((json.dumps({
+                "type": "image",
+                "subtype": "chat",
+                "user": sender,
+                "image": image
+            }) + "\n").encode("utf-8"))
 def send_to_user(username, data):
     message = (json.dumps(data) + "\n").encode("utf-8")
 
